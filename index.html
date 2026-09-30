@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ALU Playground</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#eef1f4;--panel:#fff;--ink:#14202b;--mute:#5b6b7a;--line:#cfd6dd;--off:#dde3e9;--on:#e8590c;--onink:#fff;--out:#0b6e4f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f161d;--panel:#18222c;--ink:#e6edf3;--mute:#93a3b3;--line:#2b3a48;--off:#25323e;--on:#ff8a3d;--onink:#111;--out:#4fd1a1}}
+:root[data-theme="dark"]{--bg:#0f161d;--panel:#18222c;--ink:#e6edf3;--mute:#93a3b3;--line:#2b3a48;--off:#25323e;--on:#ff8a3d;--onink:#111;--out:#4fd1a1}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 4px;letter-spacing:-.01em}
+p.sub{margin:0 0 20px;color:var(--mute)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+label,.lab{font-weight:600}
+input[type=number],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=number]{width:5.5em}
+.bits{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.bit{font:600 1.15rem ui-monospace,Menlo,Consolas,monospace;height:48px;border-radius:6px;border:1px solid var(--line);background:var(--off);color:var(--mute);cursor:pointer}
+.bit.on{background:var(--on);color:var(--onink);border-color:var(--on)}
+.bit:focus-visible,select:focus-visible,input:focus-visible,.pill:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.idx{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:4px;font-size:.72rem;color:var(--mute);text-align:center}
+.result .bits .bit{cursor:default;color:var(--mute)}
+.result .bits .bit.on{background:var(--out);border-color:var(--out);color:var(--onink)}
+.vals{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 4px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.vals b{font-size:1.2rem}
+.flags{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pill{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.9rem;color:var(--mute);background:var(--bg)}
+.pill.on{background:var(--out);border-color:var(--out);color:var(--onink);font-weight:600}
+.why{margin:12px 0 0;color:var(--mute);font-size:.95rem;min-height:3em}
+footer{color:var(--mute);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<h1>ALU Playground</h1>
+<p class="sub">Flip the bits, pick an operation, and see the result and flags of an 8-bit ALU update live.</p>
+
+<section class="panel" aria-label="Input A">
+  <div class="row"><span class="lab">A</span><label>Decimal <input id="na" type="number" min="0" max="255" value="0" aria-label="A as decimal"></label></div>
+  <div class="bits" id="ba"></div><div class="idx" id="ia"></div>
+</section>
+
+<section class="panel" aria-label="Input B">
+  <div class="row"><span class="lab">B</span><label>Decimal <input id="nb" type="number" min="0" max="255" value="0" aria-label="B as decimal"></label></div>
+  <div class="bits" id="bb"></div><div class="idx" id="ib"></div>
+</section>
+
+<section class="panel">
+  <div class="row"><label for="op">Operation</label>
+    <select id="op">
+      <option value="ADD">A + B (add)</option>
+      <option value="SUB">A − B (subtract)</option>
+      <option value="AND">A AND B</option>
+      <option value="OR">A OR B</option>
+      <option value="XOR">A XOR B</option>
+      <option value="NOT">NOT A</option>
+      <option value="SHL">A shift left</option>
+      <option value="SHR">A shift right</option>
+    </select></div>
+</section>
+
+<section class="panel result" aria-live="polite">
+  <div class="row"><span class="lab">Result</span></div>
+  <div class="bits" id="br"></div><div class="idx" id="ir"></div>
+  <div class="vals"><span>bin <b id="vb"></b></span><span>hex <b id="vh"></b></span><span>dec <b id="vd"></b></span><span>signed <b id="vs"></b></span></div>
+  <div class="flags">
+    <span class="pill" id="fZ" title="Zero: result is 0">Z zero</span>
+    <span class="pill" id="fN" title="Negative: top bit is 1">N negative</span>
+    <span class="pill" id="fC" title="Carry out (borrow for subtract, bit shifted out for shifts)">C carry</span>
+    <span class="pill" id="fV" title="Signed overflow">V overflow</span>
+  </div>
+  <p class="why" id="why"></p>
+</section>
+
+<footer>Unsigned 8-bit values, 0 to 255. Signed view uses two's complement. C means borrow on subtract.</footer>
+</main>
+<script>
+var a=0,b=0;
+var $=function(i){return document.getElementById(i)};
+function build(id,idx,name,onclick){
+  var h="",x="";
+  for(var i=7;i>=0;i--){
+    h+='<button class="bit" data-i="'+i+'" aria-label="'+name+' bit '+i+'"'+(onclick?'':' tabindex="-1" aria-hidden="true"')+'>0</button>';
+    x+="<span>"+i+"</span>";
+  }
+  $(id).innerHTML=h;$(idx).innerHTML=x;
+  if(onclick)$(id).addEventListener("click",function(e){
+    var t=e.target.closest(".bit");if(!t)return;onclick(+t.dataset.i);
+  });
+}
+function paint(id,v){
+  var els=$(id).children;
+  for(var k=0;k<8;k++){var bit=(v>>(7-k))&1;els[k].textContent=bit;els[k].classList.toggle("on",!!bit);}
+}
+function bin(v){return ("00000000"+v.toString(2)).slice(-8)}
+function clamp(n){n=parseInt(n,10);if(isNaN(n))n=0;return Math.max(0,Math.min(255,n))}
+function run(){
+  var op=$("op").value,r,c=0,v=0,why="";
+  if(op=="ADD"){var s=a+b;r=s&255;c=s>255?1:0;v=((~(a^b))&(a^r)&128)?1:0;
+    why=a+" + "+b+" = "+s+(c?", which needs 9 bits, so the top bit is dropped and carry is set.":".")+(v?" Two positives gave a negative (or the reverse), so overflow is set.":"");}
+  else if(op=="SUB"){var d=a-b;r=d&255;c=a<b?1:0;v=((a^b)&(a^r)&128)?1:0;
+    why=a+" − "+b+" = "+d+(c?", below zero, so it wraps around and borrow (C) is set.":".")+(v?" The signed result did not fit, so overflow is set.":"");}
+  else if(op=="AND"){r=a&b;why="Each result bit is 1 only where both A and B have a 1.";}
+  else if(op=="OR"){r=a|b;why="Each result bit is 1 where A or B (or both) has a 1.";}
+  else if(op=="XOR"){r=a^b;why="Each result bit is 1 where A and B differ.";}
+  else if(op=="NOT"){r=(~a)&255;why="Every bit of A is flipped.";}
+  else if(op=="SHL"){r=(a<<1)&255;c=(a>>7)&1;why="Bits move up one place, a 0 enters at the bottom, and the old top bit goes to carry. This doubles A unless bits are lost.";}
+  else {r=a>>1;c=a&1;why="Bits move down one place, a 0 enters at the top, and the old bottom bit goes to carry. This halves A, rounding down.";}
+  var n=(r>>7)&1,z=r===0?1:0;
+  paint("br",r);paint("ba",a);paint("bb",b);
+  $("vb").textContent=bin(r);$("vh").textContent="0x"+("0"+r.toString(16).toUpperCase()).slice(-2);
+  $("vd").textContent=r;$("vs").textContent=n?r-256:r;
+  $("fZ").classList.toggle("on",!!z);$("fN").classList.toggle("on",!!n);
+  $("fC").classList.toggle("on",!!c);$("fV").classList.toggle("on",!!v);
+  $("why").textContent=why;
+  if(document.activeElement!==$("na"))$("na").value=a;
+  if(document.activeElement!==$("nb"))$("nb").value=b;
+}
+build("ba","ia","A",function(i){a^=(1<<i);run()});
+build("bb","ib","B",function(i){b^=(1<<i);run()});
+build("br","ir","Result",null);
+$("na").addEventListener("input",function(){a=clamp(this.value);run()});
+$("nb").addEventListener("input",function(){b=clamp(this.value);run()});
+$("op").addEventListener("change",run);
+a=200;b=100;$("op").value="ADD";run();
+</script>
+</body>
+</html>
